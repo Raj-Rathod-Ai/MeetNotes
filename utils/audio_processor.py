@@ -5,11 +5,15 @@ import tempfile
 import time
 from pathlib import Path
 from typing import List, Optional
-import static_ffmpeg
 import yt_dlp
 
-# Initialize static ffmpeg binaries if system ffmpeg is missing
-static_ffmpeg.add_paths()
+# Safe initialization for static_ffmpeg only if system ffmpeg is missing
+try:
+    if not shutil.which("ffmpeg"):
+        import static_ffmpeg
+        static_ffmpeg.add_paths()
+except Exception:
+    pass
 
 FFMPEG_EXE = shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE_EXE = shutil.which("ffprobe") or "ffprobe"
