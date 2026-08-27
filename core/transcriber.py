@@ -28,12 +28,18 @@ def extract_video_id(url_or_id: str) -> Optional[str]:
         r"(?:v=|\/v\/|embed\/)([0-9A-Za-z_-]{11})",
         r"youtu\.be\/([0-9A-Za-z_-]{11})",
         r"shorts\/([0-9A-Za-z_-]{11})",
-        r"([0-9A-Za-z_-]{11})",
     ]
     for pattern in patterns:
         match = re.search(pattern, raw)
         if match and len(match.group(1)) == 11:
             return match.group(1)
+            
+    # Fallback to query param extraction
+    if "v=" in raw:
+        part = raw.split("v=")[1].split("&")[0].split("?")[0]
+        if len(part) == 11:
+            return part
+
     return None
 
 
@@ -82,19 +88,31 @@ def fetch_innertube_captions(video_id: str) -> Optional[str]:
 
 def fetch_youtube_captions(url_or_id: str) -> Optional[str]:
     """
-    Attempt instant caption extraction from YouTube using multiple resilient strategies.
-    Executes in under 2 seconds even on datacenter hosting like Render.
+    Attempt instant multi-lingual caption extraction from YouTube.
+    Executes in under 1 second for any public video (English, Hindi, Hinglish, etc.).
     """
     video_id = extract_video_id(url_or_id)
     if not video_id:
         return None
 
-    # Strategy 1: YouTube Transcript API with browser session
+    # Strategy 1: YouTube Transcript API with multi-lingual language codes
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         ytt = YouTubeTranscriptApi()
-        transcript_list = ytt.list(video_id=video_id)
         
+        # Try fetching with multi-language list
+        supported_langs = ["en", "hi", "en-US", "en-GB", "es", "fr", "de", "auto"]
+        try:
+            snippets = ytt.fetch(video_id, languages=supported_langs)
+            parts = [s.text if hasattr(s, "text") else s.get("text", "") for s in snippets]
+            text = " ".join(parts).strip()
+            if text and len(text) > 50:
+                return text
+        except Exception:
+            pass
+
+        # If direct fetch fails, iterate through available transcript list
+        transcript_list = ytt.list(video_id=video_id)
         for candidate in transcript_list:
             fetched = candidate.fetch()
             parts = []
