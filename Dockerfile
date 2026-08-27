@@ -7,9 +7,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     MALLOC_TRIM_THRESHOLD_=100000
 
-# Install ffmpeg
+# Install ffmpeg and nodejs (required by yt-dlp to solve YouTube JS signature challenges)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Install lightweight requirements

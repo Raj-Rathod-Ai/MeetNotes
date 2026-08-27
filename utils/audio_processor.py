@@ -37,10 +37,26 @@ def auto_purge_old_temp_files(max_age_seconds: int = 600) -> None:
                 pass
 
 
+def get_cookie_file() -> Optional[str]:
+    """Check for cookies.txt file or YOUTUBE_COOKIES env var to bypass bot checks."""
+    local_cookie = Path("cookies.txt")
+    if local_cookie.exists():
+        return str(local_cookie.resolve())
+        
+    cookies_env = os.getenv("YOUTUBE_COOKIES")
+    if cookies_env and cookies_env.strip():
+        temp_cookie_path = os.path.join(tempfile.gettempdir(), "yt_cookies.txt")
+        with open(temp_cookie_path, "w", encoding="utf-8") as f:
+            f.write(cookies_env.strip())
+        return temp_cookie_path
+        
+    return None
+
+
 def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
     """
     Download lowest bandwidth audio-only stream from YouTube into ephemeral storage
-    with Proxy support, Geo-Bypass headers, and multi-client rotation.
+    with Cookie bypass, Proxy support, Geo-Bypass headers, and multi-client rotation.
     """
     auto_purge_old_temp_files()
     
@@ -49,6 +65,7 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
     
     out_template = str(target_dir / "%(id)s.%(ext)s")
     proxy = os.getenv("YOUTUBE_PROXY") or os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
+    cookie_file = get_cookie_file()
     
     options = {
         "format": "bestaudio[ext=m4a]/bestaudio/best",
@@ -79,6 +96,9 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
         "no_warnings": True,
     }
 
+    if cookie_file:
+        options["cookiefile"] = cookie_file
+
     if proxy:
         options["proxy"] = proxy.strip()
     
@@ -92,12 +112,16 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
             raise ValueError(
                 "This video is regionally licensed to India and blocked on Render's US cloud servers. "
                 "To process it: please switch to the 'File Upload' tab to upload the media file directly, "
-                "or configure a YOUTUBE_PROXY in your environment."
+                "or configure a YOUTUBE_PROXY / YOUTUBE_COOKIES in your environment."
             )
         elif "Video unavailable" in error_msg:
             raise ValueError("This YouTube video is unavailable or deleted. Please check the link.")
         elif "Sign in" in error_msg or "age-restricted" in error_msg or "bot" in error_msg:
-            raise ValueError("This video requires YouTube account login. Please upload the recording directly using the File Upload tab.")
+            raise ValueError(
+                "YouTube requires bot verification on cloud datacenter IPs. "
+                "You can bypass this by adding your YOUTUBE_COOKIES in Render Environment, "
+                "or by uploading the recording directly using the File Upload tab."
+            )
         else:
             raise ValueError(f"Could not access YouTube video: {error_msg}")
     except Exception as exc:
