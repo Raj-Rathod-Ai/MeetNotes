@@ -38,9 +38,9 @@ def auto_purge_old_temp_files(max_age_seconds: int = 600) -> None:
 
 
 def get_cookie_file() -> Optional[str]:
-    """Check for cookies.txt file or YOUTUBE_COOKIES env var to bypass bot checks."""
+    """Check for cookies.txt file or YOUTUBE_COOKIES env var."""
     local_cookie = Path("cookies.txt")
-    if local_cookie.exists():
+    if local_cookie.exists() and local_cookie.stat().st_size > 50:
         return str(local_cookie.resolve())
         
     cookies_env = os.getenv("YOUTUBE_COOKIES")
@@ -53,21 +53,11 @@ def get_cookie_file() -> Optional[str]:
     return None
 
 
-def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
-    """
-    Download any available audio or video stream from YouTube into ephemeral storage
-    and extract mono 16k WAV with ffmpeg.
-    """
-    auto_purge_old_temp_files()
-    
-    target_dir = Path(output_dir) if output_dir else Path(tempfile.mkdtemp(prefix="meetnote_yt_"))
-    target_dir.mkdir(parents=True, exist_ok=True)
-    
-    out_template = str(target_dir / "%(id)s.%(ext)s")
+def _download_stream(url: str, target_dir: Path, out_template: str, use_cookie: bool = True) -> str:
+    """Attempt download with specified cookie configuration."""
     proxy = os.getenv("YOUTUBE_PROXY") or os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
-    cookie_file = get_cookie_file()
-    
-    # Resilient format selector: tries audio first, falls back to any video/audio stream
+    cookie_file = get_cookie_file() if use_cookie else None
+
     options = {
         "format": "ba/b/bestaudio/best",
         "outtmpl": out_template,
@@ -78,6 +68,12 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
         },
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb"],
+                "player_skip": ["webpage", "configs"]
+            }
+        },
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -87,7 +83,6 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
         ],
         "quiet": True,
         "no_warnings": True,
-        "ignoreerrors": False,
     }
 
     if cookie_file:
@@ -95,37 +90,59 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
 
     if proxy:
         options["proxy"] = proxy.strip()
-    
-    try:
-        with yt_dlp.YoutubeDL(options) as ydl:
-            info = ydl.extract_info(url, download=True)
-            video_id = info.get("id", "audio")
-    except DownloadError as err:
-        error_msg = str(err)
-        if "not made this video available in your country" in error_msg or "country" in error_msg:
-            raise ValueError(
-                "This video is regionally restricted and cannot be downloaded directly by Render's US cloud servers. "
-                "Please upload the audio/video file directly using the 'File Upload' tab."
-            )
-        elif "Video unavailable" in error_msg:
-            raise ValueError("This YouTube video is unavailable or deleted. Please check the link.")
-        elif "Sign in" in error_msg or "age-restricted" in error_msg or "bot" in error_msg:
-            raise ValueError(
-                "YouTube has blocked cloud IP downloads for this video. "
-                "Please upload the media file directly using the 'File Upload' tab."
-            )
-        else:
-            raise ValueError(f"Could not access YouTube video: {error_msg}")
-    except Exception as exc:
-        raise ValueError(f"YouTube extraction error: {exc}")
-        
+
+    with yt_dlp.YoutubeDL(options) as ydl:
+        info = ydl.extract_info(url, download=True)
+        video_id = info.get("id", "audio")
+
     wav_file = target_dir / f"{video_id}.wav"
     if not wav_file.exists():
         candidates = list(target_dir.glob(f"*{video_id}*.wav"))
         if candidates:
             wav_file = candidates[0]
-            
+
     return str(wav_file.resolve())
+
+
+def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
+    """
+    Download lowest bandwidth audio-only stream from YouTube into ephemeral storage
+    with automatic cookie fallback and multi-client rotation.
+    """
+    auto_purge_old_temp_files()
+    
+    target_dir = Path(output_dir) if output_dir else Path(tempfile.mkdtemp(prefix="meetnote_yt_"))
+    target_dir.mkdir(parents=True, exist_ok=True)
+    
+    out_template = str(target_dir / "%(id)s.%(ext)s")
+    
+    # Attempt 1: Standard download with mobile client rotation
+    try:
+        return _download_stream(url, target_dir, out_template, use_cookie=False)
+    except Exception as first_err:
+        first_msg = str(first_err)
+        
+        # Attempt 2: If failed and cookies exist, try with cookie
+        if get_cookie_file():
+            try:
+                return _download_stream(url, target_dir, out_template, use_cookie=True)
+            except Exception:
+                pass
+
+        if "not made this video available in your country" in first_msg or "country" in first_msg:
+            raise ValueError(
+                "This video is regionally restricted and cannot be downloaded directly by Render's US cloud servers. "
+                "Please upload the audio/video file directly using the 'File Upload' tab."
+            )
+        elif "Video unavailable" in first_msg:
+            raise ValueError("This YouTube video is unavailable or deleted. Please check the link.")
+        elif "Sign in" in first_msg or "age-restricted" in first_msg or "bot" in first_msg or "reloaded" in first_msg:
+            raise ValueError(
+                "YouTube requires verification on cloud datacenter IPs. "
+                "Please upload the recording directly using the File Upload tab."
+            )
+        else:
+            raise ValueError(f"Could not access YouTube video: {first_msg}")
 
 
 def standardize_audio(file_path: str, output_dir: Optional[str] = None) -> str:
