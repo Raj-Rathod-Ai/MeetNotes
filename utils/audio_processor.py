@@ -40,7 +40,7 @@ def auto_purge_old_temp_files(max_age_seconds: int = 600) -> None:
 def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
     """
     Download lowest bandwidth audio-only stream from YouTube into ephemeral storage
-    using Geo-Bypass headers and multi-client rotation to work globally on cloud hosting.
+    with Proxy support, Geo-Bypass headers, and multi-client rotation.
     """
     auto_purge_old_temp_files()
     
@@ -48,6 +48,7 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
     target_dir.mkdir(parents=True, exist_ok=True)
     
     out_template = str(target_dir / "%(id)s.%(ext)s")
+    proxy = os.getenv("YOUTUBE_PROXY") or os.getenv("HTTP_PROXY") or os.getenv("HTTPS_PROXY")
     
     options = {
         "format": "bestaudio[ext=m4a]/bestaudio/best",
@@ -55,7 +56,7 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
         "ffmpeg_location": FFMPEG_DIR or FFMPEG_PATH,
         # Geo-bypass configuration
         "geo_bypass": True,
-        "geo_bypass_country": "IN",
+        "geo_bypass_country": os.getenv("GEO_BYPASS_COUNTRY", "IN"),
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
@@ -63,7 +64,7 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
         },
         "extractor_args": {
             "youtube": {
-                "player_client": ["android", "web", "mweb"],
+                "player_client": ["android", "ios", "web", "mweb"],
                 "player_skip": ["webpage", "configs"]
             }
         },
@@ -77,6 +78,9 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
         "quiet": True,
         "no_warnings": True,
     }
+
+    if proxy:
+        options["proxy"] = proxy.strip()
     
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
@@ -84,9 +88,15 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
             video_id = info.get("id", "audio")
     except DownloadError as err:
         error_msg = str(err)
-        if "Video unavailable" in error_msg:
+        if "not made this video available in your country" in error_msg or "country" in error_msg:
+            raise ValueError(
+                "This video is regionally licensed to India and blocked on Render's US cloud servers. "
+                "To process it: please switch to the 'File Upload' tab to upload the media file directly, "
+                "or configure a YOUTUBE_PROXY in your environment."
+            )
+        elif "Video unavailable" in error_msg:
             raise ValueError("This YouTube video is unavailable or deleted. Please check the link.")
-        elif "Sign in" in error_msg or "age-restricted" in error_msg:
+        elif "Sign in" in error_msg or "age-restricted" in error_msg or "bot" in error_msg:
             raise ValueError("This video requires YouTube account login. Please upload the recording directly using the File Upload tab.")
         else:
             raise ValueError(f"Could not access YouTube video: {error_msg}")
