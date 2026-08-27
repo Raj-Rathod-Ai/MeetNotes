@@ -79,7 +79,9 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
             video_id = info.get("id", "audio")
     except DownloadError as err:
         error_msg = str(err)
-        if "Video unavailable" in error_msg:
+        if "not made this video available in your country" in error_msg or "country" in error_msg:
+            raise ValueError("This YouTube video is geo-restricted by the uploader and not available in the server's region. Please upload the audio/video file directly using the File Upload tab.")
+        elif "Video unavailable" in error_msg:
             raise ValueError("This YouTube video is unavailable (it may be private, deleted, or region-blocked). Please check the link or upload the recording directly.")
         elif "Sign in" in error_msg or "age-restricted" in error_msg or "bot" in error_msg:
             raise ValueError("YouTube requires human verification on datacenter IPs. Please upload the audio/video file directly using the File Upload tab.")
