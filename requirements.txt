@@ -4,11 +4,9 @@
 # ── Frontend & Application Framework ──────────────────────────────────────────
 streamlit>=1.35.0
 
-# ── Audio / Video Acquisition ─────────────────────────────────────────────────
+# ── Audio / Video Acquisition (Native FFmpeg) ──────────────────────────────────
 yt-dlp>=2024.4.9
 youtube-transcript-api>=0.6.2
-pydub>=0.25.1
-pyaudioop>=0.1.1                  # Required for Python 3.13+ pydub audioop compatibility
 ffmpeg-python>=0.2.0
 static-ffmpeg>=2.5
 

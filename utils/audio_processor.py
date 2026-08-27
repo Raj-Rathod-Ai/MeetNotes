@@ -1,29 +1,24 @@
 import os
 import shutil
+import subprocess
 import tempfile
 import time
 from pathlib import Path
 from typing import List, Optional
 import static_ffmpeg
 import yt_dlp
-from yt_dlp.utils import DownloadError, ExtractorError
-from pydub import AudioSegment
 
-# Initialize static ffmpeg binaries
+# Initialize static ffmpeg binaries if system ffmpeg is missing
 static_ffmpeg.add_paths()
 
-FFMPEG_PATH = shutil.which("ffmpeg")
-FFMPEG_DIR = os.path.dirname(FFMPEG_PATH) if FFMPEG_PATH else None
-
-if FFMPEG_PATH:
-    AudioSegment.converter = FFMPEG_PATH
-    AudioSegment.ffmpeg = FFMPEG_PATH
+FFMPEG_EXE = shutil.which("ffmpeg") or "ffmpeg"
+FFPROBE_EXE = shutil.which("ffprobe") or "ffprobe"
 
 
 def auto_purge_old_temp_files(max_age_seconds: int = 600) -> None:
     """
     Auto-cleans any temporary meeting files created more than 10 minutes ago.
-    Prevents storage buildup on free hosting (Render).
+    Prevents storage buildup on free hosting (Streamlit Cloud).
     """
     temp_base = Path(tempfile.gettempdir())
     current_time = time.time()
@@ -61,7 +56,7 @@ def _download_stream(url: str, target_dir: Path, out_template: str, use_cookie: 
     options = {
         "format": "ba/b/bestaudio/best",
         "outtmpl": out_template,
-        "ffmpeg_location": FFMPEG_DIR or FFMPEG_PATH,
+        "ffmpeg_location": FFMPEG_EXE,
         "geo_bypass": True,
         "geo_bypass_country": os.getenv("GEO_BYPASS_COUNTRY", "IN"),
         "http_headers": {
@@ -131,14 +126,14 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
 
         if "not made this video available in your country" in first_msg or "country" in first_msg:
             raise ValueError(
-                "This video is regionally restricted and cannot be downloaded directly by Render's US cloud servers. "
+                "This video is regionally restricted and cannot be downloaded directly by cloud servers. "
                 "Please upload the audio/video file directly using the 'File Upload' tab."
             )
         elif "Video unavailable" in first_msg:
             raise ValueError("This YouTube video is unavailable or deleted. Please check the link.")
         elif "Sign in" in first_msg or "age-restricted" in first_msg or "bot" in first_msg or "reloaded" in first_msg:
             raise ValueError(
-                "YouTube requires verification on cloud datacenter IPs. "
+                "YouTube requires account login or verification on cloud datacenter IPs. "
                 "Please upload the recording directly using the File Upload tab."
             )
         else:
@@ -146,7 +141,7 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
 
 
 def standardize_audio(file_path: str, output_dir: Optional[str] = None) -> str:
-    """Resample any media format to 16kHz mono WAV for Whisper."""
+    """Resample any media format to 16kHz mono WAV for Whisper using direct FFmpeg."""
     path_obj = Path(file_path)
     target_dir = Path(output_dir) if output_dir else path_obj.parent
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -156,31 +151,64 @@ def standardize_audio(file_path: str, output_dir: Optional[str] = None) -> str:
     if str(path_obj.resolve()) == str(output_path.resolve()):
         return str(output_path)
 
-    sound = AudioSegment.from_file(file_path)
-    sound = sound.set_channels(1).set_frame_rate(16000)
-    sound.export(str(output_path), format="wav")
+    cmd = [
+        FFMPEG_EXE,
+        "-y",
+        "-i", str(path_obj.resolve()),
+        "-ar", "16000",
+        "-ac", "1",
+        "-c:a", "pcm_s16le",
+        str(output_path.resolve())
+    ]
+    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     return str(output_path)
 
 
-def split_audio_chunks(wav_path: str, chunk_minutes: int = 10) -> List[str]:
-    """Segment audio tracks into 10-minute slices."""
-    audio = AudioSegment.from_wav(wav_path)
-    chunk_len_ms = chunk_minutes * 60 * 1000
+def get_audio_duration_seconds(file_path: str) -> float:
+    """Get audio duration in seconds using ffprobe."""
+    cmd = [
+        FFPROBE_EXE,
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        file_path
+    ]
+    try:
+        res = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, check=True)
+        return float(res.stdout.strip())
+    except Exception:
+        return 0.0
 
-    if len(audio) <= chunk_len_ms:
+
+def split_audio_chunks(wav_path: str, chunk_minutes: int = 10) -> List[str]:
+    """Segment audio tracks into 10-minute slices using direct FFmpeg."""
+    duration = get_audio_duration_seconds(wav_path)
+    chunk_len_sec = chunk_minutes * 60
+
+    if duration <= chunk_len_sec or duration <= 0:
         return [wav_path]
 
     stem = Path(wav_path).stem
     parent = Path(wav_path).parent
     chunk_files = []
 
-    for idx, start_ms in enumerate(range(0, len(audio), chunk_len_ms)):
-        segment = audio[start_ms : start_ms + chunk_len_ms]
+    num_chunks = int(duration // chunk_len_sec) + (1 if duration % chunk_len_sec > 0 else 0)
+    for idx in range(num_chunks):
+        start_sec = idx * chunk_len_sec
         part_path = parent / f"{stem}_part_{idx}.wav"
-        segment.export(str(part_path), format="wav")
+        cmd = [
+            FFMPEG_EXE,
+            "-y",
+            "-ss", str(start_sec),
+            "-t", str(chunk_len_sec),
+            "-i", wav_path,
+            "-c", "copy",
+            str(part_path.resolve())
+        ]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         chunk_files.append(str(part_path))
 
-    return chunk_files
+    return chunk_files if chunk_files else [wav_path]
 
 
 def process_input(source: str, chunk_minutes: int = 10, work_dir: Optional[str] = None) -> List[str]:
@@ -196,7 +224,7 @@ def process_input(source: str, chunk_minutes: int = 10, work_dir: Optional[str] 
 
 
 def cleanup_files(file_paths: List[str]) -> None:
-    """Immediately remove temporary audio files from disk to keep Render storage empty."""
+    """Immediately remove temporary audio files from disk to keep storage empty."""
     for path in file_paths:
         try:
             if path and os.path.exists(path):
