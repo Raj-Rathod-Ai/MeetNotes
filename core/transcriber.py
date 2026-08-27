@@ -14,16 +14,19 @@ _faster_whisper_model = None
 
 def extract_video_id(url_or_id: str) -> Optional[str]:
     """Extract clean 11-char YouTube video ID from various URL formats."""
-    if len(url_or_id) == 11 and not ("/" in url_or_id or "." in url_or_id):
-        return url_or_id
+    raw = url_or_id.strip()
+    if len(raw) == 11 and not ("/" in raw or "." in raw or "?" in raw):
+        return raw
+
     patterns = [
-        r"(?:v=|\/)([0-9A-Za-z_-]{11}).*",
         r"youtu\.be\/([0-9A-Za-z_-]{11})",
+        r"(?:v=|\/v\/|embed\/)([0-9A-Za-z_-]{11})",
         r"shorts\/([0-9A-Za-z_-]{11})",
+        r"([0-9A-Za-z_-]{11})",
     ]
     for pattern in patterns:
-        match = re.search(pattern, url_or_id)
-        if match:
+        match = re.search(pattern, raw)
+        if match and len(match.group(1)) == 11:
             return match.group(1)
     return None
 
@@ -42,14 +45,19 @@ def fetch_youtube_captions(url_or_id: str) -> Optional[str]:
         ytt = YouTubeTranscriptApi()
         transcript_list = ytt.list(video_id=video_id)
         
-        # Try English first, then any available transcript
         for candidate in transcript_list:
             fetched = candidate.fetch()
-            text = " ".join(item.text for item in fetched if hasattr(item, "text"))
-            if text and len(text.strip()) > 50:
-                return text.strip()
-    except Exception:
-        pass
+            parts = []
+            for item in fetched:
+                if hasattr(item, "text"):
+                    parts.append(str(item.text))
+                elif isinstance(item, dict) and "text" in item:
+                    parts.append(str(item["text"]))
+            text = " ".join(parts).strip()
+            if text and len(text) > 50:
+                return text
+    except Exception as e:
+        print(f"Transcript API warning for {video_id}: {e}")
     return None
 
 
@@ -77,17 +85,8 @@ def transcribe_fast_whisper(chunk_path: str, model_name: str = "base") -> str:
             segments, _ = model.transcribe(chunk_path, beam_size=1, language="en")
             return " ".join(segment.text for segment in segments).strip()
         except Exception as e:
-            print(f"Faster-Whisper fallback triggered: {e}")
-
-    # Fallback to standard Whisper if faster-whisper fails
-    try:
-        import whisper
-        std_model = whisper.load_model(model_name or "base")
-        res = std_model.transcribe(chunk_path, task="transcribe")
-        return res.get("text", "").strip()
-    except Exception as exc:
-        print(f"Whisper fallback error: {exc}")
-        return ""
+            print(f"Faster-Whisper error: {e}")
+    return ""
 
 
 def _send_sarvam_slice(slice_data: tuple) -> str:
@@ -137,7 +136,6 @@ def transcribe_sarvam_parallel(chunk_path: str) -> str:
         slice_audio.export(temp_file, format="wav")
         slice_tasks.append((temp_file, headers, model_tag))
 
-    # Execute Sarvam API calls in parallel (up to 4 concurrent workers)
     with ThreadPoolExecutor(max_workers=4) as executor:
         results = list(executor.map(_send_sarvam_slice, slice_tasks))
 
@@ -145,18 +143,12 @@ def transcribe_sarvam_parallel(chunk_path: str) -> str:
 
 
 def transcribe_all(chunks: List[str], language: str = "english", model_name: Optional[str] = None, source_url: Optional[str] = None) -> str:
-    """
-    High-speed transcription pipeline:
-    1. Checks for instant YouTube captions (2 seconds).
-    2. If not available, executes 4x faster INT8 Whisper or parallel Sarvam.
-    """
-    # Tier 1: Check instant YouTube captions if source URL provided
+    """High-speed transcription pipeline with caption-first fast-path."""
     if source_url and ("youtube.com" in source_url or "youtu.be" in source_url):
         instant_text = fetch_youtube_captions(source_url)
         if instant_text and len(instant_text) > 100:
             return instant_text
 
-    # Tier 2: Transcribe chunks with accelerated engines
     results = []
     is_hinglish = language.lower().strip() == "hinglish"
 

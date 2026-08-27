@@ -39,7 +39,8 @@ def auto_purge_old_temp_files(max_age_seconds: int = 600) -> None:
 
 def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
     """
-    Download lowest bandwidth audio-only stream from YouTube into ephemeral storage.
+    Download lowest bandwidth audio-only stream from YouTube into ephemeral storage
+    using mobile and embedded player clients to bypass datacenter IP restrictions.
     """
     auto_purge_old_temp_files()
     
@@ -49,10 +50,14 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
     out_template = str(target_dir / "%(id)s.%(ext)s")
     
     options = {
-        # Select best lightweight audio stream (keeps download sizes tiny < 5MB)
         "format": "bestaudio[ext=m4a]/bestaudio/best",
         "outtmpl": out_template,
         "ffmpeg_location": FFMPEG_DIR or FFMPEG_PATH,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "ios", "mweb", "tv_embedded"]
+            }
+        },
         "postprocessors": [
             {
                 "key": "FFmpegExtractAudio",
@@ -73,7 +78,7 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
         if "Video unavailable" in error_msg:
             raise ValueError("This YouTube video is unavailable (it may be private, deleted, or region-blocked). Please check the link or upload the recording directly.")
         elif "Sign in" in error_msg or "age-restricted" in error_msg:
-            raise ValueError("This YouTube video is age-restricted or requires login. Please upload the file directly.")
+            raise ValueError("This YouTube video is age-restricted or requires login. Please upload the audio/video file directly.")
         else:
             raise ValueError(f"Could not access YouTube video: {error_msg}")
     except Exception as exc:
