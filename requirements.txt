@@ -1,50 +1,42 @@
-# ── AI Meeting Assistant ── requirements.txt ──────────────────────────────────
+# ── MeetNote — FastAPI & AI Intelligence ── requirements.txt ─────────────────
 # Python >= 3.10 recommended
 
-# ── API Layer & Server ────────────────────────────────────────────────────────
+# ── API Layer & Web Server ───────────────────────────────────────────────────
 fastapi>=0.111.0
-uvicorn>=0.30.0
+uvicorn[standard]>=0.30.0
 python-multipart>=0.0.9
 
 # ── Audio / Video acquisition ─────────────────────────────────────────────────
 yt-dlp>=2024.4.9                  # Download audio from YouTube URLs
-youtube-transcript-api>=0.6.2     # Instant YouTube transcript extraction (0.5s)
+youtube-transcript-api>=0.6.2     # Instant YouTube transcript extraction
 pydub>=0.25.1                     # Audio file manipulation / format conversion
 ffmpeg-python>=0.2.0              # FFmpeg bindings
 static-ffmpeg>=2.5                # Embedded FFmpeg and FFprobe binaries
 
 # ── Fast Speech-to-Text Engines ───────────────────────────────────────────────
-faster-whisper>=1.0.0             # 4x-8x faster CTranslate2 Whisper engine
+faster-whisper>=1.0.0             # Fast CTranslate2 INT8 Whisper engine
 openai-whisper>=20231117          # OpenAI Whisper fallback
 torch>=2.2.0                      # PyTorch backend
-torchaudio>=2.2.0                 # Audio utilities for PyTorch
-
-# ── Translation (Hindi → English) ─────────────────────────────────────────────
-deep-translator>=1.11.4           # Lightweight translation wrapper (Google backend)
+torchaudio>=2.2.0                 # Audio utilities
 
 # ── LLM Orchestration — LangChain LCEL + Mistral ──────────────────────────────
 langchain>=0.2.0
 langchain-core>=0.2.0
 langchain-community>=0.2.0
 langchain-mistralai>=0.1.0        # LangChain wrapper for Mistral API
-mistralai>=0.4.0                  # Official Mistral Python client
+mistralai>=0.4.0                  # Official Mistral client
 
-# ── RAG Pipeline ──────────────────────────────────────────────────────────────
-chromadb>=0.5.0                   # Local vector store
+# ── RAG Pipeline (In-Memory Vector Search) ────────────────────────────────────
+chromadb>=0.5.0                   # Ephemeral in-memory vector store
 langchain-chroma>=0.1.0           # LangChain Chroma integration
 sentence-transformers>=3.0.0      # HuggingFace embedding models
-langchain-huggingface>=0.0.3      # LangChain ↔ HuggingFace embeddings bridge
+langchain-huggingface>=0.0.3      # LangChain HuggingFace bridge
 huggingface-hub>=0.23.0           # Model downloading from HuggingFace Hub
 tiktoken>=0.7.0                   # Token counting for text splitting
 
-# ── Streamlit UI ──────────────────────────────────────────────────────────────
-streamlit>=1.35.0
-streamlit-extras>=0.4.0           # Additional Streamlit widgets / utilities
-watchdog>=4.0.0                   # File-change watcher (improves Streamlit hot-reload)
-
-# ── PDF & TXT Export ──────────────────────────────────────────────────────────
+# ── PDF & Markdown Export ─────────────────────────────────────────────────────
 reportlab>=4.2.0                  # PDF generation
-fpdf2>=2.7.9                      # Lightweight alternative PDF library
+fpdf2>=2.7.9                      # Alternative PDF library
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 python-dotenv>=1.0.0              # Load API keys from .env

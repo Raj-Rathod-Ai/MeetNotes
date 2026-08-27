@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MeetNote • Meeting & Video Intelligence</title>
+  <meta name="description" content="Autonomous platform converting meetings and videos into executive notes, action deliverables, and searchable knowledge.">
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+</head>
+<body>
+  <div class="app-container">
+    
+    <!-- ── Sidebar ── -->
+    <aside class="sidebar">
+      <div class="brand-header">
+        <div class="brand-glyph">📝</div>
+        <div>
+          <div class="brand-title">MeetNote</div>
+          <div class="brand-tagline">Meeting Intelligence</div>
+        </div>
+      </div>
+
+      <div class="mode-switcher">
+        <button id="mode-url" class="mode-btn active" onclick="switchMode('url')">YouTube Link</button>
+        <button id="mode-file" class="mode-btn" onclick="switchMode('file')">File Upload</button>
+      </div>
+
+      <!-- YouTube URL Input Container -->
+      <div id="url-container" class="input-group">
+        <label class="input-label" for="yt-url">YouTube Video URL</label>
+        <input type="text" id="yt-url" class="text-input" placeholder="https://youtube.com/watch?v=..." autocomplete="off">
+      </div>
+
+      <!-- File Upload Drag/Drop Container -->
+      <div id="file-container" class="input-group" style="display: none;">
+        <label class="input-label">Upload Audio / Video</label>
+        <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()">
+          <div class="dropzone-icon">📁</div>
+          <div class="dropzone-text" id="dropzone-label">Click or drag media file here</div>
+          <div class="dropzone-sub">MP3, WAV, M4A, MP4, MKV (Up to 200MB)</div>
+          <input type="file" id="file-input" style="display: none;" accept=".mp3,.wav,.m4a,.mp4,.mkv,.webm,.ogg" onchange="handleFileSelected(this)">
+        </div>
+      </div>
+
+      <!-- Controls Row -->
+      <div class="controls-row">
+        <div class="input-group">
+          <label class="input-label" for="lang-select">Language</label>
+          <select id="lang-select" class="select-input">
+            <option value="english">English</option>
+            <option value="hinglish">Hinglish</option>
+          </select>
+        </div>
+        <div class="input-group">
+          <label class="input-label" for="model-select">Model Tier</label>
+          <select id="model-select" class="select-input">
+            <option value="base">Base (Fast)</option>
+            <option value="small">Small (Precise)</option>
+            <option value="tiny">Tiny (Ultra-fast)</option>
+          </select>
+        </div>
+      </div>
+
+      <button id="btn-generate" class="btn-primary" onclick="generateNotes()">
+        <span>📝</span> Generate Notes
+      </button>
+
+      <div class="status-badges">
+        <div class="chip chip-success">● Mistral AI Engine Online</div>
+        <div class="chip chip-primary">● In-Memory Vector Search</div>
+      </div>
+    </aside>
+
+    <!-- ── Main Workspace ── -->
+    <main class="main-content">
+      <header class="workspace-header">
+        <div class="header-meta">
+          <span class="chip chip-primary">Accelerated Fast Engine</span>
+          <span class="chip chip-success">Zero Disk Leak</span>
+        </div>
+        <h1 class="workspace-title">MeetNote Workspace</h1>
+        <p class="workspace-desc">
+          Transform meeting recordings and videos into structured executive briefings, owner action items, and searchable knowledge.
+        </p>
+      </header>
+
+      <!-- ── Live Animated Progress Tracker ── -->
+      <section id="progress-section" class="progress-card" style="display: none;">
+        <div class="progress-header">
+          <div class="progress-title" id="progress-heading">
+            <span class="spinner">⚡</span> Processing Recording...
+          </div>
+          <span class="chip chip-primary" id="progress-percent">0%</span>
+        </div>
+
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill" id="progress-bar"></div>
+        </div>
+
+        <div class="phase-list">
+          <div class="phase-item" id="phase-1">
+            <div class="phase-icon">1</div>
+            <span>Phase 1: Audio / Stream Acquisition</span>
+          </div>
+          <div class="phase-item" id="phase-2">
+            <div class="phase-icon">2</div>
+            <span>Phase 2: Speech-to-Text Decoding</span>
+          </div>
+          <div class="phase-item" id="phase-3">
+            <div class="phase-icon">3</div>
+            <span>Phase 3: Executive Synthesis & Briefing</span>
+          </div>
+          <div class="phase-item" id="phase-4">
+            <div class="phase-icon">4</div>
+            <span>Phase 4: Action Items & Deliverables</span>
+          </div>
+          <div class="phase-item" id="phase-5">
+            <div class="phase-icon">5</div>
+            <span>Phase 5: In-Memory Vector Indexing & RAG</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Initial Empty State Hero ── -->
+      <section id="hero-section" class="hero-card">
+        <div class="hero-glyph">📝</div>
+        <h2 class="hero-title">Ready to Generate Notes</h2>
+        <p class="hero-text">
+          Enter a YouTube link or upload an audio/video recording in the sidebar to generate comprehensive executive notes and chat with meeting knowledge.
+        </p>
+      </section>
+
+      <!-- ── Results Dashboard ── -->
+      <section id="results-section" class="results-container" style="display: none;">
+        <div class="session-title-card">
+          <div>
+            <div class="session-heading" id="result-title">Meeting Title</div>
+          </div>
+          
+          <div class="metrics-strip">
+            <div class="metric-box">
+              <span class="metric-val" id="metric-words">0</span>
+              <span class="metric-lbl">Words</span>
+            </div>
+            <div class="metric-box">
+              <span class="metric-val" id="metric-time">~0 min</span>
+              <span class="metric-lbl">Read Time</span>
+            </div>
+          </div>
+
+          <div class="export-actions">
+            <button class="btn-export" onclick="downloadExport('pdf')">📄 PDF Report</button>
+            <button class="btn-export" onclick="downloadExport('md')">📝 Markdown</button>
+          </div>
+        </div>
+
+        <!-- Tabs Navigation -->
+        <nav class="tabs-nav">
+          <button class="tab-btn active" onclick="switchTab('summary')">📋 Executive Briefing</button>
+          <button class="tab-btn" onclick="switchTab('actions')">🎯 Action Deliverables</button>
+          <button class="tab-btn" onclick="switchTab('chat')">💬 Interactive Q&A</button>
+          <button class="tab-btn" onclick="switchTab('transcript')">📝 Verbatim Transcript</button>
+        </nav>
+
+        <!-- Tab 1: Summary -->
+        <div id="tab-summary" class="tab-pane active">
+          <div class="two-col-grid">
+            <div class="content-block">
+              <h3 class="block-title">📋 Executive Summary</h3>
+              <div class="prose-text" id="content-summary"></div>
+            </div>
+            <div class="content-block">
+              <h3 class="block-title">🔑 Key Alignments & Decisions</h3>
+              <div class="prose-text" id="content-decisions"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Actions -->
+        <div id="tab-actions" class="tab-pane">
+          <div class="two-col-grid">
+            <div class="content-block">
+              <h3 class="block-title">🎯 Action Items & Ownership</h3>
+              <div class="prose-text" id="content-actions"></div>
+            </div>
+            <div class="content-block">
+              <h3 class="block-title">❓ Open Discussion & Follow-ups</h3>
+              <div class="prose-text" id="content-questions"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Chat -->
+        <div id="tab-chat" class="tab-pane">
+          <div class="chat-container">
+            <div class="chat-messages" id="chat-messages">
+              <div class="chat-bubble assistant">
+                👋 Hello! I have indexed the entire meeting transcript into vector memory. Ask me anything about specific numbers, decisions, assignments, or speakers.
+              </div>
+            </div>
+            <div class="chat-input-bar">
+              <input type="text" id="chat-query" class="chat-input" placeholder="Ask a question about this meeting..." onkeydown="if(event.key==='Enter') sendChatMessage()">
+              <button class="btn-send" onclick="sendChatMessage()">Send</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 4: Transcript -->
+        <div id="tab-transcript" class="tab-pane">
+          <div class="content-block">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <h3 class="block-title">📝 Complete Verbatim Transcript</h3>
+              <button class="btn-export" onclick="copyTranscript()">📋 Copy Text</button>
+            </div>
+            <div class="transcript-box" id="content-transcript"></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

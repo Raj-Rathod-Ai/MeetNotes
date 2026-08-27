@@ -2,13 +2,14 @@ import os
 import shutil
 import tempfile
 from typing import Optional
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, BackgroundTasks
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response, JSONResponse
+from fastapi.responses import Response, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
 
-from utils.audio_processor import process_input, cleanup_files
+from utils.audio_processor import process_input, cleanup_files, auto_purge_old_temp_files
 from utils.exporter import export_as_pdf, export_as_markdown
 from core.transcriber import transcribe_all, fetch_youtube_captions
 from core.summarizer import summarize, generate_title
@@ -18,9 +19,9 @@ from core.rag_engine import build_rag_chain, ask_question
 load_dotenv(override=True)
 
 app = FastAPI(
-    title="MeetNote API",
-    description="High-Performance Meeting & Video Intelligence API with Automatic Storage Cleanup",
-    version="1.0.0",
+    title="MeetNote",
+    description="High-Performance Meeting & Video Intelligence Platform",
+    version="2.0.0",
 )
 
 # CORS configuration
@@ -31,6 +32,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static directory for UI assets
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 class UrlRequest(BaseModel):
@@ -58,6 +64,7 @@ def run_pipeline_with_cleanup(source_path: str, language: str = "english", model
     Executes the transcription and analysis pipeline, ensuring all temporary
     audio and chunk files are deleted immediately after transcription.
     """
+    auto_purge_old_temp_files()
     created_chunks = []
     transcript = None
     clean_source = source_path.strip()
@@ -80,7 +87,7 @@ def run_pipeline_with_cleanup(source_path: str, language: str = "english", model
                 shutil.rmtree(temp_dir, ignore_errors=True)
             raise e
 
-    if not transcript:
+    if not transcript or not transcript.strip():
         raise ValueError("Could not extract or transcribe audio from the provided source.")
 
     # Step 3: LLM Synthesis & Extraction (In-memory, zero disk footprint)
@@ -102,24 +109,17 @@ def run_pipeline_with_cleanup(source_path: str, language: str = "english", model
 
 
 @app.get("/")
-def root():
-    return {
-        "status": "online",
-        "service": "MeetNote API",
-        "endpoints": {
-            "health": "/health",
-            "process_url": "POST /api/process-url",
-            "upload_file": "POST /api/upload-file",
-            "chat": "POST /api/chat",
-            "export_pdf": "POST /api/export-pdf",
-            "export_md": "POST /api/export-md",
-        }
-    }
+def serve_ui():
+    """Serves the fast, responsive single-page web UI."""
+    index_file = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+    return {"service": "MeetNote API", "status": "online"}
 
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "service": "meetnote-api"}
+    return {"status": "healthy", "service": "meetnote"}
 
 
 @app.post("/api/process-url")
