@@ -1,45 +1,42 @@
 # ── MeetNote — FastAPI & AI Intelligence ── requirements.txt ─────────────────
-# Python >= 3.10 recommended
+# Optimized for Render Free Tier (<512MB RAM)
 
 # ── API Layer & Web Server ───────────────────────────────────────────────────
 fastapi>=0.111.0
 uvicorn[standard]>=0.30.0
 python-multipart>=0.0.9
 
-# ── Audio / Video acquisition ─────────────────────────────────────────────────
-yt-dlp>=2024.4.9                  # Download audio from YouTube URLs
-youtube-transcript-api>=0.6.2     # Instant YouTube transcript extraction
-pydub>=0.25.1                     # Audio file manipulation / format conversion
-ffmpeg-python>=0.2.0              # FFmpeg bindings
-static-ffmpeg>=2.5                # Embedded FFmpeg and FFprobe binaries
+# ── Audio / Video Acquisition ─────────────────────────────────────────────────
+yt-dlp>=2024.4.9
+youtube-transcript-api>=0.6.2
+pydub>=0.25.1
+ffmpeg-python>=0.2.0
+static-ffmpeg>=2.5
 
 # ── Fast Speech-to-Text Engines ───────────────────────────────────────────────
-faster-whisper>=1.0.0             # Fast CTranslate2 INT8 Whisper engine
-openai-whisper>=20231117          # OpenAI Whisper fallback
-torch>=2.2.0                      # PyTorch backend
-torchaudio>=2.2.0                 # Audio utilities
+faster-whisper>=1.0.0             # Ultra-lightweight CTranslate2 INT8 engine
 
 # ── LLM Orchestration — LangChain LCEL + Mistral ──────────────────────────────
 langchain>=0.2.0
 langchain-core>=0.2.0
 langchain-community>=0.2.0
-langchain-mistralai>=0.1.0        # LangChain wrapper for Mistral API
-mistralai>=0.4.0                  # Official Mistral client
+langchain-mistralai>=0.1.0
+mistralai>=0.4.0
 
 # ── RAG Pipeline (In-Memory Vector Search) ────────────────────────────────────
-chromadb>=0.5.0                   # Ephemeral in-memory vector store
-langchain-chroma>=0.1.0           # LangChain Chroma integration
-sentence-transformers>=3.0.0      # HuggingFace embedding models
-langchain-huggingface>=0.0.3      # LangChain HuggingFace bridge
-huggingface-hub>=0.23.0           # Model downloading from HuggingFace Hub
-tiktoken>=0.7.0                   # Token counting for text splitting
+chromadb>=0.5.0
+langchain-chroma>=0.1.0
+sentence-transformers>=3.0.0
+langchain-huggingface>=0.0.3
+huggingface-hub>=0.23.0
+tiktoken>=0.7.0
 
 # ── PDF & Markdown Export ─────────────────────────────────────────────────────
-reportlab>=4.2.0                  # PDF generation
-fpdf2>=2.7.9                      # Alternative PDF library
+reportlab>=4.2.0
+fpdf2>=2.7.9
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
-python-dotenv>=1.0.0              # Load API keys from .env
+python-dotenv>=1.0.0
 numpy>=1.26.0
-tqdm>=4.66.0                      # Progress bars
+tqdm>=4.66.0
 requests>=2.32.0
