@@ -1,0 +1,36 @@
+services:
+  # Option 1: Deploy MeetNote Streamlit Full App (with automatic disk cleanup)
+  - type: web
+    name: meetnote-app
+    runtime: python
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "streamlit run app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: WHISPER_MODEL
+        value: base
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: HF_HUB_DISABLE_SYMLINKS_WARNING
+        value: "1"
+
+  # Option 2: Deploy MeetNote FastAPI Backend REST API
+  - type: web
+    name: meetnote-api
+    runtime: python
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "uvicorn api:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: WHISPER_MODEL
+        value: base
+      - key: MISTRAL_API_KEY
+        sync: false
+      - key: SARVAM_API_KEY
+        sync: false
+      - key: HF_HUB_DISABLE_SYMLINKS_WARNING
+        value: "1"
