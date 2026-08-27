@@ -1,11 +1,14 @@
 import os
 import re
 import json
+import subprocess
+import shutil
 from pathlib import Path
 from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor
 import requests
-from pydub import AudioSegment
+
+from utils.audio_processor import FFMPEG_EXE, get_audio_duration_seconds
 
 SARVAM_ENDPOINT = "https://api.sarvam.ai/speech-to-text-translate"
 SARVAM_CHUNK_LIMIT_SEC = 25
@@ -138,7 +141,7 @@ def fetch_youtube_captions(url_or_id: str) -> Optional[str]:
 def get_faster_whisper(model_size: str = "tiny"):
     """
     Initialize high-speed CTranslate2 Whisper model in INT8 mode strictly constrained
-    to 1 thread and 1 worker to operate under 120MB RAM on Render Free Tier.
+    to 1 thread and 1 worker to operate under 120MB RAM.
     """
     global _faster_whisper_model
     if _faster_whisper_model is None:
@@ -212,16 +215,26 @@ def transcribe_sarvam_parallel(chunk_path: str) -> str:
         raise ValueError("SARVAM_API_KEY is required for Hinglish transcription. Set it in .env")
 
     model_tag = os.getenv("SARVAM_STT_MODEL", "saaras:v2.5")
-    sound = AudioSegment.from_wav(chunk_path)
-    window_ms = SARVAM_CHUNK_LIMIT_SEC * 1000
+    duration = get_audio_duration_seconds(chunk_path)
+    window_sec = SARVAM_CHUNK_LIMIT_SEC
 
     slice_tasks = []
     headers = {"api-subscription-key": api_key}
+    num_slices = int(duration // window_sec) + (1 if duration % window_sec > 0 else 0)
 
-    for idx, start_ms in enumerate(range(0, len(sound), window_ms)):
-        slice_audio = sound[start_ms : start_ms + window_ms]
+    for idx in range(num_slices):
+        start_sec = idx * window_sec
         temp_file = f"{chunk_path}_sv_slice_{idx}.wav"
-        slice_audio.export(temp_file, format="wav")
+        cmd = [
+            FFMPEG_EXE,
+            "-y",
+            "-ss", str(start_sec),
+            "-t", str(window_sec),
+            "-i", chunk_path,
+            "-c", "copy",
+            temp_file
+        ]
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         slice_tasks.append((temp_file, headers, model_tag))
 
     with ThreadPoolExecutor(max_workers=3) as executor:
