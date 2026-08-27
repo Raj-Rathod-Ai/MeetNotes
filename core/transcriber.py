@@ -117,28 +117,42 @@ def fetch_youtube_captions(url_or_id: str) -> Optional[str]:
     return None
 
 
-def get_faster_whisper(model_size: str = "base"):
-    """Initialize high-speed CTranslate2 Whisper model in INT8 mode."""
+def get_faster_whisper(model_size: str = "tiny"):
+    """
+    Initialize high-speed CTranslate2 Whisper model in INT8 mode strictly constrained
+    to 1 thread and 1 worker to operate under 120MB RAM on Render Free Tier.
+    """
     global _faster_whisper_model
     if _faster_whisper_model is None:
         try:
             from faster_whisper import WhisperModel
-            target_model = model_size or os.getenv("WHISPER_MODEL", "base")
-            _faster_whisper_model = WhisperModel(target_model, device="cpu", compute_type="int8")
+            target_model = model_size or os.getenv("WHISPER_MODEL", "tiny")
+            _faster_whisper_model = WhisperModel(
+                target_model,
+                device="cpu",
+                compute_type="int8",
+                cpu_threads=1,
+                num_workers=1,
+            )
         except Exception:
             _faster_whisper_model = None
     return _faster_whisper_model
 
 
-def transcribe_fast_whisper(chunk_path: str, model_name: str = "base") -> str:
-    """4x faster transcription using CTranslate2 INT8."""
+def transcribe_fast_whisper(chunk_path: str, model_name: str = "tiny") -> str:
+    """Ultra-low RAM 1-thread transcription using CTranslate2 INT8."""
     if not os.path.exists(chunk_path):
         return ""
 
     model = get_faster_whisper(model_name)
     if model is not None:
         try:
-            segments, _ = model.transcribe(chunk_path, beam_size=1, language="en")
+            segments, _ = model.transcribe(
+                chunk_path,
+                beam_size=1,
+                language="en",
+                vad_filter=True,
+            )
             return " ".join(segment.text for segment in segments).strip()
         except Exception as e:
             print(f"Faster-Whisper error: {e}")
@@ -192,7 +206,7 @@ def transcribe_sarvam_parallel(chunk_path: str) -> str:
         slice_audio.export(temp_file, format="wav")
         slice_tasks.append((temp_file, headers, model_tag))
 
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=3) as executor:
         results = list(executor.map(_send_sarvam_slice, slice_tasks))
 
     return " ".join(filter(None, results)).strip()
@@ -214,7 +228,7 @@ def transcribe_all(chunks: List[str], language: str = "english", model_name: Opt
         if is_hinglish:
             text = transcribe_sarvam_parallel(chunk)
         else:
-            text = transcribe_fast_whisper(chunk, model_name=model_name or "base")
+            text = transcribe_fast_whisper(chunk, model_name=model_name or "tiny")
         if text:
             results.append(text)
 
