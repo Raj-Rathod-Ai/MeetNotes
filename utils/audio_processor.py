@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Optional
 import static_ffmpeg
 import yt_dlp
+from yt_dlp.utils import DownloadError, ExtractorError
 from pydub import AudioSegment
 
 # Initialize static ffmpeg binaries
@@ -63,9 +64,20 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
         "no_warnings": True,
     }
     
-    with yt_dlp.YoutubeDL(options) as ydl:
-        info = ydl.extract_info(url, download=True)
-        video_id = info.get("id", "audio")
+    try:
+        with yt_dlp.YoutubeDL(options) as ydl:
+            info = ydl.extract_info(url, download=True)
+            video_id = info.get("id", "audio")
+    except DownloadError as err:
+        error_msg = str(err)
+        if "Video unavailable" in error_msg:
+            raise ValueError("This YouTube video is unavailable (it may be private, deleted, or region-blocked). Please check the link or upload the recording directly.")
+        elif "Sign in" in error_msg or "age-restricted" in error_msg:
+            raise ValueError("This YouTube video is age-restricted or requires login. Please upload the file directly.")
+        else:
+            raise ValueError(f"Could not access YouTube video: {error_msg}")
+    except Exception as exc:
+        raise ValueError(f"YouTube extraction error: {exc}")
         
     wav_file = target_dir / f"{video_id}.wav"
     if not wav_file.exists():
