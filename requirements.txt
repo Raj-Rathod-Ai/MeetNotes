@@ -1,10 +1,8 @@
-# ── MeetNote — Lightweight High-Speed Stack (<100MB RAM) ─────────────
-# Guaranteed to run smoothly on Render Free Tier (512MB RAM)
+# ── MeetNote — Streamlit & AI Intelligence Stack ────────────────────────
+# Optimized for Streamlit Cloud (share.streamlit.io) & Local Execution
 
-# ── API Layer & Web Server ───────────────────────────────────────────────────
-fastapi>=0.111.0
-uvicorn[standard]>=0.30.0
-python-multipart>=0.0.9
+# ── Frontend & Application Framework ──────────────────────────────────────────
+streamlit>=1.35.0
 
 # ── Audio / Video Acquisition ─────────────────────────────────────────────────
 yt-dlp>=2024.4.9
