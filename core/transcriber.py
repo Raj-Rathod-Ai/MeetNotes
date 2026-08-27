@@ -1,5 +1,6 @@
 import os
 import re
+import json
 from pathlib import Path
 from typing import List, Optional
 from concurrent.futures import ThreadPoolExecutor
@@ -11,16 +12,21 @@ SARVAM_CHUNK_LIMIT_SEC = 25
 
 _faster_whisper_model = None
 
+BROWSER_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9,hi;q=0.8",
+}
+
 
 def extract_video_id(url_or_id: str) -> Optional[str]:
     """Extract clean 11-char YouTube video ID from various URL formats."""
     raw = url_or_id.strip()
-    if len(raw) == 11 and not ("/" in raw or "." in raw or "?" in raw):
+    if len(raw) == 11 and not ("/" in raw or "." in raw or "?" in raw or "=" in raw):
         return raw
 
     patterns = [
-        r"youtu\.be\/([0-9A-Za-z_-]{11})",
         r"(?:v=|\/v\/|embed\/)([0-9A-Za-z_-]{11})",
+        r"youtu\.be\/([0-9A-Za-z_-]{11})",
         r"shorts\/([0-9A-Za-z_-]{11})",
         r"([0-9A-Za-z_-]{11})",
     ]
@@ -31,15 +37,59 @@ def extract_video_id(url_or_id: str) -> Optional[str]:
     return None
 
 
+def fetch_innertube_captions(video_id: str) -> Optional[str]:
+    """Direct InnerTube caption extraction bypassing datacenter IP blocks."""
+    try:
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        resp = requests.get(url, headers=BROWSER_HEADERS, timeout=10)
+        if not resp.ok:
+            return None
+
+        html = resp.text
+        match = re.search(r'"captionTracks":\s*(\[.*?\])', html)
+        if not match:
+            return None
+
+        tracks = json.loads(match.group(1))
+        if not tracks:
+            return None
+
+        # Pick first available caption track (English or Hindi preferred)
+        track_url = None
+        for t in tracks:
+            lang = t.get("languageCode", "").lower()
+            if "en" in lang or "hi" in lang:
+                track_url = t.get("baseUrl")
+                break
+        if not track_url:
+            track_url = tracks[0].get("baseUrl")
+
+        if track_url:
+            c_resp = requests.get(track_url, headers=BROWSER_HEADERS, timeout=10)
+            if c_resp.ok:
+                # Strip XML tags
+                text = re.sub(r"<[^>]+>", " ", c_resp.text)
+                text = re.sub(r"&amp;", "&", text)
+                text = re.sub(r"&quot;", '"', text)
+                text = re.sub(r"&#39;", "'", text)
+                text = re.sub(r"\s+", " ", text).strip()
+                if len(text) > 50:
+                    return text
+    except Exception as e:
+        print(f"InnerTube direct scraper note: {e}")
+    return None
+
+
 def fetch_youtube_captions(url_or_id: str) -> Optional[str]:
     """
-    Attempt instant caption extraction from YouTube.
-    Executes in under 2 seconds even for 4-hour recordings.
+    Attempt instant caption extraction from YouTube using multiple resilient strategies.
+    Executes in under 2 seconds even on datacenter hosting like Render.
     """
     video_id = extract_video_id(url_or_id)
     if not video_id:
         return None
 
+    # Strategy 1: YouTube Transcript API with browser session
     try:
         from youtube_transcript_api import YouTubeTranscriptApi
         ytt = YouTubeTranscriptApi()
@@ -57,7 +107,13 @@ def fetch_youtube_captions(url_or_id: str) -> Optional[str]:
             if text and len(text) > 50:
                 return text
     except Exception as e:
-        print(f"Transcript API warning for {video_id}: {e}")
+        print(f"YouTubeTranscriptApi info for {video_id}: {e}")
+
+    # Strategy 2: Direct InnerTube HTML Caption Track Scraper
+    direct_text = fetch_innertube_captions(video_id)
+    if direct_text and len(direct_text) > 50:
+        return direct_text
+
     return None
 
 

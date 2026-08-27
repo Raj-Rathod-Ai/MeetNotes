@@ -53,6 +53,10 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
         "format": "bestaudio[ext=m4a]/bestaudio/best",
         "outtmpl": out_template,
         "ffmpeg_location": FFMPEG_DIR or FFMPEG_PATH,
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        },
         "extractor_args": {
             "youtube": {
                 "player_client": ["android", "ios", "mweb", "tv_embedded"]
@@ -77,8 +81,8 @@ def download_youtube(url: str, output_dir: Optional[str] = None) -> str:
         error_msg = str(err)
         if "Video unavailable" in error_msg:
             raise ValueError("This YouTube video is unavailable (it may be private, deleted, or region-blocked). Please check the link or upload the recording directly.")
-        elif "Sign in" in error_msg or "age-restricted" in error_msg:
-            raise ValueError("This YouTube video is age-restricted or requires login. Please upload the audio/video file directly.")
+        elif "Sign in" in error_msg or "age-restricted" in error_msg or "bot" in error_msg:
+            raise ValueError("YouTube requires human verification on datacenter IPs. Please upload the audio/video file directly using the File Upload tab.")
         else:
             raise ValueError(f"Could not access YouTube video: {error_msg}")
     except Exception as exc:
