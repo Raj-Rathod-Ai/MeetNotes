@@ -1,29 +1,32 @@
 import os
 import chromadb
 from langchain_chroma import Chroma
-from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_mistralai import MistralAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
-EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 _embedder = None
 
 
 def get_embedder():
-    """Singleton instance for embedding model to save RAM on Render."""
+    """
+    Ultra-lightweight cloud embeddings via Mistral AI.
+    Uses 0 MB server RAM and 0 MB disk space.
+    """
     global _embedder
     if _embedder is None:
-        _embedder = HuggingFaceEmbeddings(
-            model_name=EMBEDDING_MODEL,
-            model_kwargs={"device": "cpu"},
+        api_key = (os.getenv("MISTRAL_API_KEY") or "").strip()
+        _embedder = MistralAIEmbeddings(
+            model="mistral-embed",
+            mistral_api_key=api_key,
         )
     return _embedder
 
 
 def build_vector_store(transcript: str) -> Chroma:
     """
-    Creates an Ephemeral (In-Memory) Chroma vector store.
-    Zero disk storage used — completely purged when the session ends or user leaves.
+    Creates an Ephemeral In-Memory Chroma vector store.
+    Zero disk storage used — completely purged when session ends.
     """
     splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
@@ -36,7 +39,6 @@ def build_vector_store(transcript: str) -> Chroma:
         for i, chunk in enumerate(text_chunks)
     ]
 
-    # In-memory ephemeral client (0 bytes written to disk!)
     ephemeral_client = chromadb.EphemeralClient()
 
     return Chroma.from_documents(

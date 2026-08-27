@@ -2,30 +2,26 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Prevent Python from writing .pyc files & buffer stdout
+# Environment optimizations
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    HF_HUB_DISABLE_SYMLINKS_WARNING=1 \
     MALLOC_TRIM_THRESHOLD_=100000
 
-# Install minimal system dependencies (ffmpeg)
+# Install ffmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PyTorch CPU-only first (saves ~2GB disk and 350MB RAM by excluding NVIDIA CUDA wheels)
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-
-# Install remaining Python packages
+# Install lightweight requirements
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Copy application files and static UI
+# Copy project files and static UI
 COPY . .
 
-# Expose default Render port
+# Expose Render port
 EXPOSE 10000
 
-# Start lightweight Uvicorn server binding to Render's dynamic $PORT
+# Run FastAPI server binding dynamically to Render's $PORT
 CMD ["sh", "-c", "uvicorn api:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1"]

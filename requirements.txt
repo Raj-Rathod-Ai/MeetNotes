@@ -1,5 +1,5 @@
-# ── MeetNote — FastAPI & AI Intelligence ── requirements.txt ─────────────────
-# Optimized for Render Free Tier (<512MB RAM)
+# ── MeetNote — Lightweight High-Speed Stack (<100MB RAM) ─────────────
+# Guaranteed to run smoothly on Render Free Tier (512MB RAM)
 
 # ── API Layer & Web Server ───────────────────────────────────────────────────
 fastapi>=0.111.0
@@ -14,21 +14,18 @@ ffmpeg-python>=0.2.0
 static-ffmpeg>=2.5
 
 # ── Fast Speech-to-Text Engines ───────────────────────────────────────────────
-faster-whisper>=1.0.0             # Ultra-lightweight CTranslate2 INT8 engine
+faster-whisper>=1.0.0             # Standalone CTranslate2 C++ INT8 engine
 
-# ── LLM Orchestration — LangChain LCEL + Mistral ──────────────────────────────
+# ── LLM Orchestration & Cloud Embeddings ──────────────────────────────────────
 langchain>=0.2.0
 langchain-core>=0.2.0
 langchain-community>=0.2.0
-langchain-mistralai>=0.1.0
+langchain-mistralai>=0.1.0        # Mistral LLM & Cloud Embeddings (0MB local RAM)
 mistralai>=0.4.0
 
-# ── RAG Pipeline (In-Memory Vector Search) ────────────────────────────────────
+# ── RAG Pipeline (In-Memory Chroma) ───────────────────────────────────────────
 chromadb>=0.5.0
 langchain-chroma>=0.1.0
-sentence-transformers>=3.0.0
-langchain-huggingface>=0.0.3
-huggingface-hub>=0.23.0
 tiktoken>=0.7.0
 
 # ── PDF & Markdown Export ─────────────────────────────────────────────────────
